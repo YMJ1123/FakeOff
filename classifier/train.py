@@ -7,11 +7,11 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 from torch.nn import functional as F
 
-from .focal_loss import FocalLoss
-from .focal_loss_adaptive_gamma import FocalLossAdaptive
+from .loss.focal_loss import FocalLoss
+from .loss.focal_loss_adaptive_gamma import FocalLossAdaptive
 from .model import EmbClassifier
 from .data import DummyDataset
-from .Metrics.metrics import (
+from .metrics.metrics import (
     expected_calibration_error,
     maximum_calibration_error,
     adaptive_expected_calibration_error,
@@ -25,7 +25,7 @@ def get_args():
     parser.add_argument("--n_epochs", type=int, default=10)
     parser.add_argument("--check_cal_every", type=int, default=1)
     parser.add_argument("--val_every", type=int, default=2)
-    parser.add_argument("--save_every", type=int, default=5)
+    parser.add_argument("--save_every", type=int, default=2)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--gamma", type=float, default=2.0)
     parser.add_argument("--adaptive", action="store_true")
@@ -33,6 +33,7 @@ def get_args():
     parser.add_argument("--train_path", type=str, default="train_data.pt")
     parser.add_argument("--val_path", type=str, default="val_data.pt")
     parser.add_argument("--save_dir", type=str, default="classifier/checkpoints")
+    parser.add_argument("--save_prefix", type=str, default="")
     parser.add_argument("--hidden_dim", type=int, default=512)
     parser.add_argument("--n_bins", type=int, default=15)
     return parser.parse_args()
@@ -52,6 +53,7 @@ def train(
         check_cal_every=1,
         val_every=2,
         save_every=5,
+        save_prefix="model",
         n_bins=15,
         device=torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 ):
@@ -143,7 +145,7 @@ def train(
         
         # Save checkpoint
         if (ep + 1) % save_every == 0:
-            checkpoint_path = os.path.join(save_dir, f"model_epoch_{ep + 1}.pt")
+            checkpoint_path = os.path.join(save_dir, f"{save_prefix}_epoch_{ep + 1}.pt")
             torch.save({
                 'epoch': ep + 1,
                 'model_state_dict': model.state_dict(),
@@ -181,5 +183,6 @@ if __name__ == '__main__':
         check_cal_every=args.check_cal_every,
         val_every=args.val_every,
         save_every=args.save_every,
+        save_prefix=args.save_prefix,
         n_bins=args.n_bins
     )

@@ -1,6 +1,6 @@
 
-from .focal_loss import FocalLoss
-from .focal_loss_adaptive_gamma import FocalLossAdaptive
+from .loss.focal_loss import FocalLoss
+from .loss.focal_loss_adaptive_gamma import FocalLossAdaptive
 
 import torch
 import torch.nn as nn
