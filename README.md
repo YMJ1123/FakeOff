@@ -203,12 +203,85 @@ npm run dev
 
 應用程式會在 `http://localhost:3000` 啟動。
 
-### n8n Workflow
+### n8n Workflow + Discord Bot
 
-1. 匯入 `n8n_workflow.json` 到 n8n
-2. 確保 `api_server.py` 正在運行
-3. 啟用 workflow
-4. 透過 Discord bot 或 `test_webhook.py` 測試
+n8n workflow 和 Discord bot 位於獨立 repo：[scam_detection_n8n](https://github.com/YMJ1123/scam_detection_n8n)
+
+#### 1. Clone n8n repo
+
+```bash
+git clone https://github.com/YMJ1123/scam_detection_n8n.git
+cd scam_detection_n8n
+cp .env.sample .env
+```
+
+編輯 `.env`，填入 API keys：
+
+```
+ANTI_FRAUD_API_KEY=your-anti-fraud-api-key
+BEDROCK_API_KEY=your-bedrock-api-key
+DISCORD_BOT_TOKEN=your-discord-bot-token
+N8N_WEBHOOK_URL=http://localhost:5678/webhook/anti-fraud
+```
+
+#### 2. 啟動 n8n + Discord Bot（Docker Compose）
+
+```bash
+docker-compose up -d
+```
+
+這會啟動：
+- **n8n** on `http://localhost:5678`
+- **Discord Bot** 自動連線 Discord
+
+#### 3. 匯入 Workflow
+
+1. 開啟 `http://localhost:5678`
+2. Create new workflow → **Import from File** → 選 `n8n_workflow.json`
+3. **啟動 workflow**（右上角 Active 開關打開）
+
+#### 4. 連接 scam-pipeline API Server
+
+n8n workflow 中的 **Keyword Check** 和 **Conclusion Agent** 節點會呼叫 scam-pipeline 的 API server。
+
+由於 n8n 跑在 Docker 容器中，`localhost` 指向容器自己，需要用 Docker bridge IP 才能打到主機：
+
+```bash
+# 查詢 Docker bridge IP（通常是 172.x.0.1）
+ip addr show | grep 'inet 172\.'
+
+# 確認 API server 可從該 IP 存取
+curl http://172.19.0.1:5001/health
+```
+
+然後在 n8n 的 **Keyword Check** 和 **Conclusion Agent** Code 節點中，將 `PIPELINE_API` 設定為：
+
+```javascript
+const PIPELINE_API = 'http://172.19.0.1:5001';  // 換成你的 Docker bridge IP
+```
+
+#### 5. 測試
+
+```bash
+# 確保 scam-pipeline API server 正在運行
+cd /path/to/FakeOff/scam-pipeline
+python api_server.py --port 5001
+
+# 在 scam_detection_n8n 目錄測試
+cd /path/to/scam_detection_n8n
+python test_webhook.py --text "我收到國稅局簡訊說要退稅，要點連結輸入銀行帳號"
+```
+
+#### 完整 n8n 節點流程
+
+```
+Webhook Trigger
+  → LLM Router (Bedrock)        提取 URL / 電話號碼
+  → Call APIs and Merge          查詢外部反詐 API
+  → Keyword Check                匹配關鍵字索引（scam-pipeline API）
+  → Conclusion Agent             AI 綜合判斷（scam-pipeline API）
+  → Respond to Webhook           回傳防詐分析報告
+```
 
 ## API 測試工具
 
@@ -221,6 +294,13 @@ python test_vlm.py          # 圖片分析（Claude Haiku 4.5）
 python test_text.py         # 純文字生成（Llama 3.3 70B）
 python test_embedding.py    # Embedding 測試（Titan V2 + Multimodal）
 ```
+
+## 相關 Repo
+
+| Repo | 說明 |
+|------|------|
+| [FakeOff](https://github.com/YMJ1123/FakeOff) | 主專案：前端 + scam-pipeline + API server |
+| [scam_detection_n8n](https://github.com/YMJ1123/scam_detection_n8n) | n8n workflow + Discord bot + 反詐 API 整合 |
 
 ## 注意事項
 
