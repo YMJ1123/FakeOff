@@ -1,17 +1,20 @@
 """
-End-to-end test for the API server flow:
-  1. /keyword-check → match user text
-  2. /conclude     → AI scam judgment
+End-to-end test for the API server flow (text + screenshot paths).
 
 Usage:
-  python test_api_flow.py
+  python test_api_flow.py                              # default text test
   python test_api_flow.py --text "你收到的可疑訊息"
+  python test_api_flow.py --image screenshot.png        # screenshot path
+  python test_api_flow.py --image img.jpg --text "附帶文字"
+  python test_api_flow.py --all                         # all text test cases
 """
 
 import argparse
+import base64
 import json
 import urllib.request
 import urllib.error
+from pathlib import Path
 
 API_BASE = "http://localhost:5001"
 
@@ -35,27 +38,67 @@ def call_api(path: str, payload: dict) -> dict:
         return json.loads(resp.read().decode("utf-8"))
 
 
-def run_test(text: str):
+def format_vlm_result(text: str) -> dict:
+    """Text-only path: format as same structure as VLM output."""
+    return {
+        "extracted_text": text,
+        "urls": [],
+        "phones": [],
+        "image_type": None,
+        "sender": None,
+        "summary": text[:60] + "..." if len(text) > 60 else text,
+    }
+
+
+def run_test(text: str = None, image_path: str = None):
+    has_screenshot = image_path is not None
     print(f"{'='*60}")
-    print(f"Input: {text}")
+    print(f"Input type: {'Screenshot' + (' + Text' if text else '') if has_screenshot else 'Text'}")
+    if text:
+        print(f"Text: {text}")
+    if image_path:
+        print(f"Image: {image_path}")
     print(f"{'='*60}")
 
+    # Step 0: VLM / Text normalization (unified format)
+    if has_screenshot:
+        print("\n[Step 0] VLM Screenshot Analysis (Sonnet)...")
+        with open(image_path, "rb") as f:
+            b64 = base64.b64encode(f.read()).decode()
+        vlm = call_api("/vlm-analyze", {"image_base64": b64})
+        if "error" in vlm:
+            print(f"  Error: {vlm['error']}")
+            return
+        combined_text = text + "\n\n[截圖內容]\n" + vlm["extracted_text"] if text else vlm["extracted_text"]
+    else:
+        vlm = format_vlm_result(text)
+        combined_text = text
+
+    print(f"  extracted_text: {vlm['extracted_text'][:80]}{'...' if len(vlm.get('extracted_text','')) > 80 else ''}")
+    print(f"  image_type: {vlm.get('image_type')}")
+    print(f"  sender: {vlm.get('sender')}")
+    print(f"  urls: {vlm.get('urls', [])}")
+    print(f"  phones: {vlm.get('phones', [])}")
+    print(f"  summary: {vlm.get('summary')}")
+
+    # Step 1: Keyword Check
     print("\n[Step 1] Keyword Check...")
-    kw = call_api("/keyword-check", {"text": text})
+    kw = call_api("/keyword-check", {"text": combined_text})
     print(f"  Has match: {kw['has_match']}")
     print(f"  Score: {kw['match_score']}")
     if kw["matched_categories"]:
         for cat, words in kw["matched_categories"].items():
             print(f"  [{cat}] → {', '.join(words)}")
 
-    if not kw["has_match"]:
-        print("\n  → 未命中任何高風險關鍵字，跳過 Conclusion Agent")
+    if not kw["has_match"] and not vlm.get("urls"):
+        print("\n  → 未命中關鍵字且無 URL，跳過 Conclusion Agent")
         print()
         return
 
+    # Step 2: Conclusion Agent
     print("\n[Step 2] Conclusion Agent...")
     conclusion = call_api("/conclude", {
-        "user_input": text,
+        "user_input": combined_text,
         "keyword_match": kw,
         "url_results": [],
         "number_results": [],
@@ -88,16 +131,19 @@ def run_test(text: str):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--text", type=str, default=None)
-    parser.add_argument("--all", action="store_true", help="Run all test cases")
+    parser.add_argument("--image", type=str, default=None)
+    parser.add_argument("--all", action="store_true", help="Run all text test cases")
     args = parser.parse_args()
 
-    if args.text:
-        run_test(args.text)
+    if args.image:
+        run_test(text=args.text, image_path=args.image)
+    elif args.text:
+        run_test(text=args.text)
     elif args.all:
         for t in TEST_CASES:
-            run_test(t)
+            run_test(text=t)
     else:
-        run_test(TEST_CASES[0])
+        run_test(text=TEST_CASES[0])
 
 
 if __name__ == "__main__":

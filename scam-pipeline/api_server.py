@@ -1,10 +1,11 @@
 """
-Flask API server exposing keyword_check and conclusion_agent
+Flask API server exposing VLM, keyword_check, and conclusion_agent
 as HTTP endpoints for the n8n workflow.
 
 Endpoints:
-  POST /keyword-check   — match user text against keyword index
-  POST /conclude         — final scam judgment with all context
+  POST /vlm-analyze    — screenshot analysis (Sonnet VLM)
+  POST /keyword-check  — match user text against keyword index
+  POST /conclude       — final scam judgment with all context
 
 Run:
   python api_server.py              # default port 5001
@@ -22,6 +23,7 @@ from keyword_check import (
     load_keyword_index,
     match_user_input,
 )
+from vlm_analyzer import analyze_screenshot_base64
 
 app = Flask(__name__)
 
@@ -94,6 +96,28 @@ def conclude_endpoint():
 
     judgment = judge_user_input(context_payload)
     return jsonify(judgment)
+
+
+@app.route("/vlm-analyze", methods=["POST"])
+def vlm_analyze_endpoint():
+    """
+    Input:  {"image_base64": "base64-encoded image data"}
+    Output: {
+        "extracted_text": "圖片主要區域的文字",
+        "urls": ["https://..."],
+        "phones": [{"country": "TW", "number": "+886..."}],
+        "image_type": "sms",
+        "sender": "發送者或來源",
+        "summary": "客觀描述圖片內容"
+    }
+    """
+    data = request.get_json(force=True)
+    b64 = data.get("image_base64", "")
+    if not b64:
+        return jsonify({"error": "missing 'image_base64' field"}), 400
+
+    result = analyze_screenshot_base64(b64)
+    return jsonify(result)
 
 
 @app.route("/health", methods=["GET"])

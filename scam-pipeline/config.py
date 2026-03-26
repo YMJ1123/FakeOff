@@ -5,6 +5,7 @@ Keywords, models, thresholds, and prompt templates.
 
 # ── Bedrock Model IDs ──────────────────────────────────────────────
 LLM_MODEL_ID = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+VLM_MODEL_ID = "us.anthropic.claude-sonnet-4-6"
 EMBED_TEXT_MODEL_ID = "amazon.titan-embed-text-v2:0"
 EMBED_MULTIMODAL_MODEL_ID = "amazon.titan-embed-image-v1"
 BEDROCK_REGION = "us-west-2"
