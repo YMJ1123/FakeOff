@@ -103,47 +103,43 @@ OFFICIAL_SOURCES = [
 
 # ── Prompt Templates ──────────────────────────────────────────────
 
-ANALYSIS_PROMPT = """你是一個反詐騙事件分析器。
+# Step 1: 針對單篇新聞，快速擷取可能的詐騙手法
+TACTICS_PROMPT = """你是一個反詐騙事件分析器。
 
-請根據下面這篇新聞，判斷它是否具有「可被詐騙集團利用」的空間。
+請根據以下新聞，簡要列出詐騙集團可能利用這則新聞的手法。
 
 請輸出 JSON，包含：
-1. scam_potential: "low" / "medium" / "high"
-2. reason: 為什麼這個事件容易被利用
-3. impersonation_targets: 可能被冒充的單位或角色（list）
-4. likely_channels: 可能使用的傳播方式（簡訊、email、電話、假網站、社群）（list）
-5. likely_actions: 可能誘導使用者做的事（點連結、輸入個資、轉帳、登入）（list）
-6. scam_angles: 2~5 個可能的詐騙切入角度（list）
-7. seasonality: 是否具有時效性，若有請描述
+1. scam_tactics: 2~4 個可能的詐騙手法（每個是一句話的描述）（list of strings）
+2. impersonation_targets: 可能被冒充的單位或角色（list of strings）
+3. risk_level: "low" / "medium" / "high"
 
 只輸出合法 JSON，不要多餘文字。
 
-新聞內容：
-{article_text}"""
+新聞標題：{title}
+新聞內容：{article_text}"""
 
-CASE_GENERATION_PROMPT = """你是一個反詐騙資料生成器。
+# Step 2: 結論模型，接收所有 keyword-indexed 資料做最終綜合判斷
+CONCLUSION_PROMPT = """你是麥騙 FakeOff 系統的反詐騙總結分析師。
 
-請根據以下真實新聞事件與分析結果，生成 3 個「可能出現的時效性詐騙案例摘要」。
+以下是我們從即時新聞中依「關鍵字類別」整理出的高風險事件與可能詐騙手法。
+每個類別底下有多則新聞標題以及對應的詐騙手法。
 
-限制：
-1. 不要生成可直接拿去害人的高擬真完整詐騙文案
-2. 只輸出教育與訓練用途的案例摘要
-3. 每個案例包含：
-   - title: 案例標題
-   - event_hook: 利用什麼事件切入
-   - impersonated_entity: 冒充的對象
-   - scam_goal: 詐騙目的
-   - likely_channel: 傳播管道
-   - red_flags: 辨識特徵（list）
-   - safe_response: 正確應對方式
+請你做最終綜合判斷，輸出 JSON，包含：
 
-只輸出合法 JSON array，不要多餘文字。
+1. high_alert_events: 當前最需要警示大眾的事件列表，每個事件包含：
+   - event: 事件名稱（來自新聞標題）
+   - keyword_categories: 涉及的關鍵字類別（list）
+   - primary_scam_tactic: 最主要的詐騙手法（一句話）
+   - target_audience: 最可能被騙的對象
+   - urgency: "immediate" / "watch" / "low"
+2. cross_event_patterns: 跨事件觀察到的共同詐騙模式（list of strings）
+3. recommended_alerts: 建議對外發布的警示訊息（list of strings, 2~3 則，用一般民眾看得懂的語言）
+4. summary: 整體詐騙風險摘要（一段話）
 
-新聞摘要：
-{news_summary}
+只輸出合法 JSON，不要多餘文字。
 
-事件分析：
-{analysis_json}"""
+關鍵字分類資料：
+{keyword_indexed_data}"""
 
 # ── SQLite 設定 ────────────────────────────────────────────────────
 DB_PATH = "scam_pipeline.db"
