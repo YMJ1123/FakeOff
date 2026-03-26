@@ -1,0 +1,49 @@
+{
+  "input_path": "/home/anita/hackathon/FakeOff/sample_embeddings_v2.jsonl",
+  "text_column": "v2",
+  "embedding_dimensions": 1024,
+  "split_ratio": "6:2:2",
+  "label_mapping": {
+    "ham": 0,
+    "spam": 1
+  },
+  "seed": 42,
+  "summary": {
+    "train": {
+      "path": "/home/anita/hackathon/FakeOff/embedding_tensor_splits/train.pt",
+      "size": 179,
+      "label_distribution": {
+        "0": 153,
+        "1": 26
+      },
+      "shape": [
+        179,
+        1024
+      ]
+    },
+    "val": {
+      "path": "/home/anita/hackathon/FakeOff/embedding_tensor_splits/val.pt",
+      "size": 60,
+      "label_distribution": {
+        "0": 51,
+        "1": 9
+      },
+      "shape": [
+        60,
+        1024
+      ]
+    },
+    "test": {
+      "path": "/home/anita/hackathon/FakeOff/embedding_tensor_splits/test.pt",
+      "size": 60,
+      "label_distribution": {
+        "0": 51,
+        "1": 9
+      },
+      "shape": [
+        60,
+        1024
+      ]
+    }
+  }
+}
