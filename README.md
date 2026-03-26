@@ -222,6 +222,13 @@ python test_text.py         # 純文字生成（Llama 3.3 70B）
 python test_embedding.py    # Embedding 測試（Titan V2 + Multimodal）
 ```
 
+## 相關 Repo
+
+| Repo | 說明 |
+|------|------|
+| [FakeOff](https://github.com/YMJ1123/FakeOff) | 主專案：前端 + scam-pipeline + API server |
+| [scam_detection_n8n](https://github.com/YMJ1123/scam_detection_n8n) | n8n workflow + Discord bot + 反詐 API 整合 |
+
 ## 注意事項
 
 - API Key 為短期金鑰，僅供開發測試使用
