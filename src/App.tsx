@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { 
   BrowserRouter as Router, 
   Routes, 
   Route, 
   NavLink, 
-  useLocation 
 } from 'react-router-dom';
 import { 
   Shield, 
@@ -13,14 +12,10 @@ import {
   Mail, 
   Bell, 
   ChevronRight, 
-  Search, 
   AlertTriangle, 
   CheckCircle2, 
-  Info, 
-  ExternalLink,
   ShieldCheck,
   ArrowRight,
-  MessageSquare,
   Flag,
   History,
   ClipboardPaste,
@@ -29,10 +24,14 @@ import {
   MapPin,
   TrendingDown,
   Globe,
-  AlertCircle
+  AlertCircle,
+  Loader2,
+  X,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from './lib/utils';
+import { analyzeText, analyzeScreenshot, scanUrl, type AnalysisResult as AnalysisResultType } from './services/api';
+import AnalysisResultPanel from './components/AnalysisResult';
 
 // --- Components ---
 
@@ -205,175 +204,339 @@ const StatusScreen = () => (
   </motion.div>
 );
 
-const LinksScreen = () => (
-  <motion.div 
-    initial={{ opacity: 0, y: 20 }}
-    animate={{ opacity: 1, y: 0 }}
-    exit={{ opacity: 0, y: -20 }}
-    className="space-y-12 pb-12"
-  >
-    <section className="space-y-6">
-      <div className="space-y-2">
-        <p className="text-primary font-headline font-bold uppercase tracking-widest text-xs">安全模組</p>
-        <h2 className="text-4xl md:text-5xl font-headline font-extrabold text-on-surface tracking-tight">連結/網址掃描器</h2>
-        <p className="text-on-surface-variant max-w-lg">在點擊之前，立即驗證任何網址的完整性。我們的麥騙引擎會解析重新導向和釣魚模式。</p>
-      </div>
-      <div className="relative group">
-        <div className="absolute -inset-1 bg-gradient-to-r from-primary to-primary-container rounded-2xl blur opacity-10 group-focus-within:opacity-25 transition duration-500" />
-        <div className="relative flex flex-col md:flex-row gap-4">
-          <div className="flex-grow bg-surface-container-low rounded-xl px-4 py-4 flex items-center gap-4 transition-all duration-300 focus-within:bg-surface-container-highest">
-            <LinkIcon className="w-6 h-6 text-on-surface-variant" />
-            <input 
-              type="text" 
-              placeholder="https://example.com/secure-path" 
-              className="w-full bg-transparent border-none focus:ring-0 text-on-surface placeholder:text-on-surface-variant/50 font-medium"
-            />
-          </div>
-          <button className="bg-gradient-to-br from-primary to-primary-container text-on-primary px-8 py-4 rounded-full font-headline font-bold text-lg shadow-lg active:scale-95 transition-transform">
-            立即掃描
-          </button>
+const LinksScreen = () => {
+  const [url, setUrl] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<AnalysisResultType | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleScan = useCallback(async () => {
+    if (!url.trim()) return;
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    try {
+      const res = await scanUrl(url.trim());
+      setResult(res);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '掃描失敗，請稍後再試');
+    } finally {
+      setLoading(false);
+    }
+  }, [url]);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') handleScan();
+  }, [handleScan]);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      className="space-y-12 pb-12"
+    >
+      <section className="space-y-6">
+        <div className="space-y-2">
+          <p className="text-primary font-headline font-bold uppercase tracking-widest text-xs">安全模組</p>
+          <h2 className="text-4xl md:text-5xl font-headline font-extrabold text-on-surface tracking-tight">連結/網址掃描器</h2>
+          <p className="text-on-surface-variant max-w-lg">在點擊之前，立即驗證任何網址的完整性。我們的麥騙引擎會解析重新導向和釣魚模式。</p>
         </div>
-      </div>
-    </section>
-
-    <section className="space-y-8">
-      <div className="flex items-end justify-between">
-        <h3 className="text-2xl font-headline font-bold">運作原理</h3>
-        <span className="text-sm font-headline font-semibold text-primary cursor-pointer hover:underline">進階協定</span>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {[
-          { icon: Globe, title: '全球黑名單', desc: '交叉比對超過 50 個實時威脅資料庫，包括 Google 安全瀏覽和 PhishTank。' },
-          { icon: TrendingDown, title: '釣魚偵測', desc: '分析網址字串和頁面元數據，以防範同形異義字攻擊和可疑的重新導向迴圈。' },
-          { icon: Shield, title: '沙盒掃描', desc: '連結會由我們的安全虛擬瀏覽器訪問，以偵測零時差漏洞和隱蔽式下載。' },
-        ].map((item, i) => (
-          <div key={i} className="bg-surface-container-low p-8 rounded-xl space-y-4 hover:bg-surface-container-high transition-colors">
-            <div className="w-12 h-12 rounded-full bg-primary-fixed flex items-center justify-center">
-              <item.icon className="w-6 h-6 text-primary" />
+        <div className="relative group">
+          <div className="absolute -inset-1 bg-gradient-to-r from-primary to-primary-container rounded-2xl blur opacity-10 group-focus-within:opacity-25 transition duration-500" />
+          <div className="relative flex flex-col md:flex-row gap-4">
+            <div className="flex-grow bg-surface-container-low rounded-xl px-4 py-4 flex items-center gap-4 transition-all duration-300 focus-within:bg-surface-container-highest">
+              <LinkIcon className="w-6 h-6 text-on-surface-variant" />
+              <input
+                type="text"
+                value={url}
+                onChange={e => setUrl(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="https://example.com/secure-path"
+                className="w-full bg-transparent border-none focus:ring-0 text-on-surface placeholder:text-on-surface-variant/50 font-medium"
+              />
             </div>
-            <h4 className="font-headline font-bold text-lg">{item.title}</h4>
-            <p className="text-on-surface-variant text-sm leading-relaxed">{item.desc}</p>
-          </div>
-        ))}
-      </div>
-    </section>
-
-    <section className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h3 className="text-2xl font-headline font-bold">最近網路活動</h3>
-        <button className="text-primary font-headline text-sm font-bold flex items-center gap-1 hover:underline">
-          查看全部 <ChevronRight className="w-4 h-4" />
-        </button>
-      </div>
-      <div className="space-y-3">
-        {[
-          { url: 'portal.my-banking.com', time: '2 分鐘前', status: '已驗證安全', type: 'SAFE' },
-          { url: 'bit.ly/secure-prize-claim', time: '15 分鐘前', status: '可疑', type: 'SUSPICIOUS' },
-          { url: 'amazon-login-update.net', time: '1 小時前', status: '惡意', type: 'MALICIOUS' },
-          { url: 'docs.google.com', time: '3 小時前', status: '已驗證安全', type: 'SAFE' },
-        ].map((item, i) => (
-          <div key={i} className="bg-surface-container-lowest p-5 rounded-xl flex items-center justify-between shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-center gap-4">
-              <div className="w-10 h-10 rounded-lg bg-surface-container flex items-center justify-center">
-                <Globe className="w-5 h-5 text-on-surface-variant" />
-              </div>
-              <div>
-                <p className="font-headline font-bold text-on-surface">{item.url}</p>
-                <p className="text-xs text-on-surface-variant">Scanned {item.time} • {i % 2 === 0 ? '0' : '3'} redirects</p>
-              </div>
-            </div>
-            <div className={cn(
-              "flex items-center gap-2 px-4 py-1.5 rounded-full font-bold text-xs uppercase tracking-tighter",
-              item.type === 'SAFE' ? "bg-primary-fixed text-on-primary-fixed-variant" : 
-              item.type === 'SUSPICIOUS' ? "bg-tertiary-fixed text-on-tertiary-fixed" : 
-              "bg-error-container text-on-error-container"
-            )}>
-              {item.type === 'SAFE' ? <CheckCircle2 className="w-3 h-3" /> : item.type === 'SUSPICIOUS' ? <AlertTriangle className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
-              {item.status}
-            </div>
-          </div>
-        ))}
-      </div>
-    </section>
-  </motion.div>
-);
-
-const MessagesScreen = () => (
-  <motion.div 
-    initial={{ opacity: 0, y: 20 }}
-    animate={{ opacity: 1, y: 0 }}
-    exit={{ opacity: 0, y: -20 }}
-    className="space-y-10 pb-12"
-  >
-    <header>
-      <h1 className="text-4xl font-headline font-extrabold tracking-tight text-on-surface mb-2">分析訊息</h1>
-      <p className="text-on-surface-variant font-medium">透過 AI 驅動的偵測技術，識別簡訊、電子郵件或螢幕截圖中的潛在詐騙。</p>
-    </header>
-
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-      <section className="lg:col-span-8 space-y-6">
-        <div className="bg-surface-container-lowest rounded-xl p-6 shadow-[0_12px_32px_rgba(24,28,32,0.04)]">
-          <div className="flex items-center justify-between mb-4">
-            <label className="font-headline font-bold text-lg text-on-surface">可疑文字</label>
-            <button className="flex items-center gap-2 text-primary font-headline text-sm font-bold hover:opacity-80 transition-opacity">
-              <ClipboardPaste className="w-4 h-4" />
-              貼上文字
+            <button
+              onClick={handleScan}
+              disabled={loading || !url.trim()}
+              className={cn(
+                "flex items-center justify-center gap-2 bg-gradient-to-br from-primary to-primary-container text-on-primary px-8 py-4 rounded-full font-headline font-bold text-lg shadow-lg active:scale-95 transition-transform",
+                (loading || !url.trim()) && "opacity-50 cursor-not-allowed active:scale-100"
+              )}
+            >
+              {loading && <Loader2 className="w-5 h-5 animate-spin" />}
+              {loading ? '掃描中...' : '立即掃描'}
             </button>
-          </div>
-          <textarea 
-            className="w-full min-h-[240px] bg-surface-container-low border-none rounded-xl p-4 text-on-surface focus:ring-2 focus:ring-primary/20 placeholder:text-on-surface-variant/50 font-body resize-none" 
-            placeholder="在此貼上簡訊、電子郵件或可疑訊息內容..."
-          />
-          <div className="mt-6 flex flex-col sm:flex-row gap-4">
-            <button className="flex-1 bg-gradient-to-br from-primary to-primary-container text-on-primary font-headline font-bold py-4 px-8 rounded-full shadow-lg active:scale-95 transition-all duration-200">
-              分析詐騙
-            </button>
-            <button className="flex items-center justify-center gap-2 bg-surface-container-high text-primary font-headline font-bold py-4 px-8 rounded-full active:scale-95 transition-all duration-200">
-              <ImageIcon className="w-5 h-5" />
-              上傳截圖
-            </button>
-          </div>
-        </div>
-
-        <div className="bg-secondary-container rounded-xl p-4 flex gap-4 items-start">
-          <Lightbulb className="w-5 h-5 text-on-secondary-container mt-1" />
-          <div>
-            <p className="text-on-secondary-container text-sm font-semibold">專業提示</p>
-            <p className="text-on-secondary-container/80 text-sm">為了獲得最佳結果，請包含原始訊息中發現的任何連結或電話號碼。</p>
           </div>
         </div>
       </section>
 
-      <aside className="lg:col-span-4 space-y-6">
-        <div className="bg-surface-container rounded-xl p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="font-headline font-bold text-lg">最近分析</h2>
-            <History className="w-5 h-5 text-on-surface-variant cursor-pointer hover:text-primary" />
-          </div>
-          <div className="space-y-4">
-            {[
-              { time: '2 小時前', label: '威脅', color: 'bg-error-container text-on-error-container', text: '您的包裹遞送已暫停。請更新...' },
-              { time: '昨天', label: '安全', color: 'bg-primary-fixed text-on-primary-fixed', text: '您的帳戶驗證碼為 482931...' },
-              { time: '3 天前', label: '可疑', color: 'bg-tertiary-fixed text-on-tertiary-fixed', text: '緊急：偵測到您的銀行有異常登入嘗試...' },
-            ].map((item, i) => (
-              <div key={i} className="bg-surface-container-lowest p-4 rounded-xl shadow-sm hover:shadow-md transition-shadow cursor-pointer">
-                <div className="flex items-start justify-between mb-2">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">{item.time}</span>
-                  <span className={cn("text-[10px] font-extrabold px-2 py-0.5 rounded-full", item.color)}>{item.label}</span>
-                </div>
-                <p className="text-sm font-medium line-clamp-2 text-on-surface">{item.text}</p>
-              </div>
-            ))}
-          </div>
-          <button className="w-full mt-6 text-primary font-headline text-sm font-bold flex items-center justify-center gap-2 hover:underline">
-            查看完整歷史記錄
-            <ArrowRight className="w-4 h-4" />
-          </button>
+      {error && (
+        <div className="bg-error-container rounded-xl p-4 flex gap-3 items-center">
+          <AlertCircle className="w-5 h-5 text-on-error-container flex-shrink-0" />
+          <p className="text-on-error-container text-sm font-medium">{error}</p>
         </div>
-      </aside>
-    </div>
-  </motion.div>
-);
+      )}
+
+      {result && (
+        <AnalysisResultPanel result={result} onDismiss={() => { setResult(null); setError(null); }} />
+      )}
+
+      {!result && (
+        <>
+          <section className="space-y-8">
+            <div className="flex items-end justify-between">
+              <h3 className="text-2xl font-headline font-bold">運作原理</h3>
+              <span className="text-sm font-headline font-semibold text-primary cursor-pointer hover:underline">進階協定</span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {[
+                { icon: Globe, title: '全球黑名單', desc: '交叉比對超過 50 個實時威脅資料庫，包括 Google 安全瀏覽和 PhishTank。' },
+                { icon: TrendingDown, title: '釣魚偵測', desc: '分析網址字串和頁面元數據，以防範同形異義字攻擊和可疑的重新導向迴圈。' },
+                { icon: Shield, title: '沙盒掃描', desc: '連結會由我們的安全虛擬瀏覽器訪問，以偵測零時差漏洞和隱蔽式下載。' },
+              ].map((item, i) => (
+                <div key={i} className="bg-surface-container-low p-8 rounded-xl space-y-4 hover:bg-surface-container-high transition-colors">
+                  <div className="w-12 h-12 rounded-full bg-primary-fixed flex items-center justify-center">
+                    <item.icon className="w-6 h-6 text-primary" />
+                  </div>
+                  <h4 className="font-headline font-bold text-lg">{item.title}</h4>
+                  <p className="text-on-surface-variant text-sm leading-relaxed">{item.desc}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h3 className="text-2xl font-headline font-bold">最近網路活動</h3>
+              <button className="text-primary font-headline text-sm font-bold flex items-center gap-1 hover:underline">
+                查看全部 <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="space-y-3">
+              {[
+                { url: 'portal.my-banking.com', time: '2 分鐘前', status: '已驗證安全', type: 'SAFE' },
+                { url: 'bit.ly/secure-prize-claim', time: '15 分鐘前', status: '可疑', type: 'SUSPICIOUS' },
+                { url: 'amazon-login-update.net', time: '1 小時前', status: '惡意', type: 'MALICIOUS' },
+                { url: 'docs.google.com', time: '3 小時前', status: '已驗證安全', type: 'SAFE' },
+              ].map((item, i) => (
+                <div key={i} className="bg-surface-container-lowest p-5 rounded-xl flex items-center justify-between shadow-sm hover:shadow-md transition-shadow">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-lg bg-surface-container flex items-center justify-center">
+                      <Globe className="w-5 h-5 text-on-surface-variant" />
+                    </div>
+                    <div>
+                      <p className="font-headline font-bold text-on-surface">{item.url}</p>
+                      <p className="text-xs text-on-surface-variant">Scanned {item.time} • {i % 2 === 0 ? '0' : '3'} redirects</p>
+                    </div>
+                  </div>
+                  <div className={cn(
+                    "flex items-center gap-2 px-4 py-1.5 rounded-full font-bold text-xs uppercase tracking-tighter",
+                    item.type === 'SAFE' ? "bg-primary-fixed text-on-primary-fixed-variant" :
+                    item.type === 'SUSPICIOUS' ? "bg-tertiary-fixed text-on-tertiary-fixed" :
+                    "bg-error-container text-on-error-container"
+                  )}>
+                    {item.type === 'SAFE' ? <CheckCircle2 className="w-3 h-3" /> : item.type === 'SUSPICIOUS' ? <AlertTriangle className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
+                    {item.status}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        </>
+      )}
+    </motion.div>
+  );
+};
+
+const MessagesScreen = () => {
+  const [text, setText] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<AnalysisResultType | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imageBase64, setImageBase64] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handlePaste = useCallback(async () => {
+    try {
+      const clipText = await navigator.clipboard.readText();
+      if (clipText) setText(prev => prev + clipText);
+    } catch {
+      setError('無法讀取剪貼簿內容');
+    }
+  }, []);
+
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      setImagePreview(dataUrl);
+      setImageBase64(dataUrl.split(',')[1]);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  }, []);
+
+  const handleAnalyze = useCallback(async () => {
+    if (!text.trim() && !imageBase64) return;
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    try {
+      let res: AnalysisResultType;
+      if (imageBase64) {
+        res = await analyzeScreenshot(imageBase64, text.trim() || undefined);
+      } else {
+        res = await analyzeText(text.trim());
+      }
+      setResult(res);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '分析失敗，請稍後再試');
+    } finally {
+      setLoading(false);
+    }
+  }, [text, imageBase64]);
+
+  const handleDismiss = useCallback(() => {
+    setResult(null);
+    setError(null);
+  }, []);
+
+  const clearImage = useCallback(() => {
+    setImagePreview(null);
+    setImageBase64(null);
+  }, []);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      className="space-y-10 pb-12"
+    >
+      <header>
+        <h1 className="text-4xl font-headline font-extrabold tracking-tight text-on-surface mb-2">分析訊息</h1>
+        <p className="text-on-surface-variant font-medium">透過 AI 驅動的偵測技術，識別簡訊、電子郵件或螢幕截圖中的潛在詐騙。</p>
+      </header>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        <section className="lg:col-span-8 space-y-6">
+          <div className="bg-surface-container-lowest rounded-xl p-6 shadow-[0_12px_32px_rgba(24,28,32,0.04)]">
+            <div className="flex items-center justify-between mb-4">
+              <label className="font-headline font-bold text-lg text-on-surface">可疑文字</label>
+              <button
+                onClick={handlePaste}
+                className="flex items-center gap-2 text-primary font-headline text-sm font-bold hover:opacity-80 transition-opacity"
+              >
+                <ClipboardPaste className="w-4 h-4" />
+                貼上文字
+              </button>
+            </div>
+            <textarea
+              value={text}
+              onChange={e => setText(e.target.value)}
+              className="w-full min-h-[240px] bg-surface-container-low border-none rounded-xl p-4 text-on-surface focus:ring-2 focus:ring-primary/20 placeholder:text-on-surface-variant/50 font-body resize-none"
+              placeholder="在此貼上簡訊、電子郵件或可疑訊息內容..."
+            />
+
+            {imagePreview && (
+              <div className="mt-4 relative inline-block">
+                <img src={imagePreview} alt="截圖預覽" className="max-h-40 rounded-xl border border-surface-container-high" />
+                <button
+                  onClick={clearImage}
+                  className="absolute -top-2 -right-2 w-6 h-6 bg-error text-on-error rounded-full flex items-center justify-center shadow-md"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
+            <div className="mt-6 flex flex-col sm:flex-row gap-4">
+              <button
+                onClick={handleAnalyze}
+                disabled={loading || (!text.trim() && !imageBase64)}
+                className={cn(
+                  "flex-1 flex items-center justify-center gap-2 bg-gradient-to-br from-primary to-primary-container text-on-primary font-headline font-bold py-4 px-8 rounded-full shadow-lg active:scale-95 transition-all duration-200",
+                  (loading || (!text.trim() && !imageBase64)) && "opacity-50 cursor-not-allowed active:scale-100"
+                )}
+              >
+                {loading && <Loader2 className="w-5 h-5 animate-spin" />}
+                {loading ? '分析中...' : '分析詐騙'}
+              </button>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={loading}
+                className="flex items-center justify-center gap-2 bg-surface-container-high text-primary font-headline font-bold py-4 px-8 rounded-full active:scale-95 transition-all duration-200"
+              >
+                <ImageIcon className="w-5 h-5" />
+                上傳截圖
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleFileSelect}
+                className="hidden"
+              />
+            </div>
+          </div>
+
+          {error && (
+            <div className="bg-error-container rounded-xl p-4 flex gap-3 items-center">
+              <AlertCircle className="w-5 h-5 text-on-error-container flex-shrink-0" />
+              <p className="text-on-error-container text-sm font-medium">{error}</p>
+            </div>
+          )}
+
+          {result && (
+            <AnalysisResultPanel result={result} onDismiss={handleDismiss} />
+          )}
+
+          {!result && (
+            <div className="bg-secondary-container rounded-xl p-4 flex gap-4 items-start">
+              <Lightbulb className="w-5 h-5 text-on-secondary-container mt-1" />
+              <div>
+                <p className="text-on-secondary-container text-sm font-semibold">專業提示</p>
+                <p className="text-on-secondary-container/80 text-sm">為了獲得最佳結果，請包含原始訊息中發現的任何連結或電話號碼。</p>
+              </div>
+            </div>
+          )}
+        </section>
+
+        <aside className="lg:col-span-4 space-y-6">
+          <div className="bg-surface-container rounded-xl p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="font-headline font-bold text-lg">最近分析</h2>
+              <History className="w-5 h-5 text-on-surface-variant cursor-pointer hover:text-primary" />
+            </div>
+            <div className="space-y-4">
+              {[
+                { time: '2 小時前', label: '威脅', color: 'bg-error-container text-on-error-container', text: '您的包裹遞送已暫停。請更新...' },
+                { time: '昨天', label: '安全', color: 'bg-primary-fixed text-on-primary-fixed', text: '您的帳戶驗證碼為 482931...' },
+                { time: '3 天前', label: '可疑', color: 'bg-tertiary-fixed text-on-tertiary-fixed', text: '緊急：偵測到您的銀行有異常登入嘗試...' },
+              ].map((item, i) => (
+                <div key={i} className="bg-surface-container-lowest p-4 rounded-xl shadow-sm hover:shadow-md transition-shadow cursor-pointer">
+                  <div className="flex items-start justify-between mb-2">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">{item.time}</span>
+                    <span className={cn("text-[10px] font-extrabold px-2 py-0.5 rounded-full", item.color)}>{item.label}</span>
+                  </div>
+                  <p className="text-sm font-medium line-clamp-2 text-on-surface">{item.text}</p>
+                </div>
+              ))}
+            </div>
+            <button className="w-full mt-6 text-primary font-headline text-sm font-bold flex items-center justify-center gap-2 hover:underline">
+              查看完整歷史記錄
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+        </aside>
+      </div>
+    </motion.div>
+  );
+};
 
 const AlertsScreen = () => (
   <motion.div 

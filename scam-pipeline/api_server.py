@@ -14,8 +14,10 @@ Run:
 
 import argparse
 import json
+import traceback
 
 from flask import Flask, jsonify, request
+from flask_cors import CORS
 
 from conclusion_agent import judge_user_input
 from keyword_check import (
@@ -26,6 +28,7 @@ from keyword_check import (
 from vlm_analyzer import analyze_screenshot_base64
 
 app = Flask(__name__)
+CORS(app)
 
 _keyword_index = None
 
@@ -94,7 +97,12 @@ def conclude_endpoint():
         "number_results": number_results,
     }
 
-    judgment = judge_user_input(context_payload)
+    try:
+        judgment = judge_user_input(context_payload)
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"error": f"LLM call failed: {e}"}), 502
+
     return jsonify(judgment)
 
 
@@ -116,7 +124,12 @@ def vlm_analyze_endpoint():
     if not b64:
         return jsonify({"error": "missing 'image_base64' field"}), 400
 
-    result = analyze_screenshot_base64(b64)
+    try:
+        result = analyze_screenshot_base64(b64)
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"error": f"VLM call failed: {e}"}), 502
+
     return jsonify(result)
 
 
