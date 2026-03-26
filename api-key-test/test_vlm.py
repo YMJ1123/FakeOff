@@ -12,7 +12,8 @@ with open("image.png", "rb") as f:
     image_bytes = f.read()
 
 response = client.converse(
-    modelId="us.anthropic.claude-haiku-4-5-20251001-v1:0",
+    # modelId="us.anthropic.claude-haiku-4-5-20251001-v1:0",
+    modelId="us.anthropic.claude-sonnet-4-6",
     # modelId='us.meta.llama3-3-70b-instruct-v1:0',
     messages=[{
         "role": "user",
