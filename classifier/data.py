@@ -5,8 +5,8 @@ from torch.utils.data import Dataset, DataLoader
 class DummyDataset(Dataset):
     def __init__(self, data_path='dummy_data.pt'):
         data = torch.load(data_path)
-        self.x = data['x']
-        self.y = data['y']
+        self.x = data['X']
+        self.y = data['Y']
     
     def __len__(self):
         return len(self.x)
