@@ -44,8 +44,12 @@ def build_keyword_index(articles: list[dict]) -> dict:
 
         entry = {
             "title": title,
+            "url": article.get("url", ""),
+            "source": article.get("source", ""),
+            "published_at": article.get("published_at", ""),
             "scam_tactics": tactics.get("scam_tactics", []),
             "impersonation_targets": tactics.get("impersonation_targets", []),
+            "keywords": tactics.get("keywords", []),
             "risk_level": risk,
         }
 
@@ -128,14 +132,23 @@ def run_demo():
         {
             "title": "報稅截止日延長至6月底 國稅局提醒儘速完成申報",
             "summary": "財政部宣布今年報稅截止日延長，民眾可透過官方網站或APP線上申報退稅。逾期未申報者將依法處罰。",
+            "source": "自由時報",
+            "url": "https://news.ltn.com.tw/news/life/example1",
+            "published_at": "2026-03-25",
         },
         {
             "title": "銀行系統升級 部分用戶需重新驗證帳號",
             "summary": "某銀行公告系統升級期間，用戶可能收到簡訊通知需重新登入驗證身份確認，請至官方網站操作。",
+            "source": "ETtoday",
+            "url": "https://www.ettoday.net/news/example2",
+            "published_at": "2026-03-24",
         },
         {
             "title": "青創補助再加碼 旗山說明會引爆創業熱 申請延至4/15",
             "summary": "高雄市政府青年局青創補助計畫再加碼，旗山說明會吸引大量青年參與，申請截止日延長至4月15日。",
+            "source": "Yahoo新聞",
+            "url": "https://tw.news.yahoo.com/example3",
+            "published_at": "2026-03-23",
         },
     ]
 

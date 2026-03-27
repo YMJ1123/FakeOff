@@ -66,9 +66,9 @@ SCAM_KEYWORDS = {
 }
 
 # ── 風險門檻 ───────────────────────────────────────────────────────
-SCORE_THRESHOLD_LOW = 2       # <= 2: 丟掉
-SCORE_THRESHOLD_MEDIUM = 4    # 3-4: 進 LLM 二次判斷
-                              # >= 5: 高潛力，直接進案例生成
+SCORE_THRESHOLD_LOW = 0       # <= 0: 丟掉 (任何有命中就保留)
+SCORE_THRESHOLD_MEDIUM = 3    # 1-3: 進 LLM 二次判斷
+                              # >= 4: 高潛力，直接進案例生成
 
 # ── 新聞來源 RSS ───────────────────────────────────────────────────
 NEWS_SOURCES = {
@@ -113,6 +113,7 @@ TACTICS_PROMPT = """你是一個反詐騙事件分析器。
 1. scam_tactics: 2~4 個可能的詐騙手法（每個是一句話的描述）（list of strings）
 2. impersonation_targets: 可能被冒充的單位或角色（list of strings）
 3. risk_level: "low" / "medium" / "high"
+4. keywords: 5~10 個可能出現在相關詐騙訊息中的關鍵字或短語（list of strings）。這些關鍵字應該是詐騙者在利用這則新聞進行詐騙時，受害者可能在訊息中看到的字詞，例如具體的機構名稱、政策名稱、操作指令、專有名詞等。
 
 只輸出合法 JSON，不要多餘文字。
 

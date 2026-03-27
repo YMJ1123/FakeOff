@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { 
   BrowserRouter as Router, 
   Routes, 
@@ -19,10 +19,13 @@ import {
   Lightbulb,
   Loader2,
   X,
+  ExternalLink,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from './lib/utils';
-import { analyzeText, analyzeScreenshot, type AnalysisResult as AnalysisResultType } from './services/api';
+import { analyzeText, analyzeScreenshot, fetchNews, type AnalysisResult as AnalysisResultType, type NewsArticle } from './services/api';
 import AnalysisResultPanel from './components/AnalysisResult';
 
 // --- Components ---
@@ -266,40 +269,181 @@ const MessagesScreen = () => {
   );
 };
 
-const NewsScreen = () => (
-  <motion.div
-    initial={{ opacity: 0, y: 20 }}
-    animate={{ opacity: 1, y: 0 }}
-    exit={{ opacity: 0, y: -20 }}
-    className="space-y-8 pb-12"
-  >
-    <header>
-      <h1 className="text-4xl font-headline font-extrabold tracking-tight text-on-surface mb-2">詐騙時事</h1>
-      <p className="text-on-surface-variant font-medium">最新詐騙手法與防範資訊，即時掌握社會動態。</p>
-    </header>
+const CATEGORY_LABELS: Record<string, string> = {
+  official_event: '官方事件',
+  money_flow: '金流相關',
+  account_verify: '帳號驗證',
+  delivery_channel: '傳播管道',
+  time_pressure: '時間壓力',
+  hot_events: '熱門事件',
+};
 
-    <div className="space-y-4">
-      {[
-        { title: '假冒銀行客服來電激增', date: '2026-03-25', tag: '電話詐騙', desc: '近期大量民眾反映接到假冒銀行客服的來電，聲稱帳戶異常需要驗證身份，藉此騙取個人資訊。' },
-        { title: '投資詐騙新手法：AI 生成假名人代言', date: '2026-03-24', tag: '投資詐騙', desc: '詐騙集團利用 AI 深偽技術製作名人推薦投資的影片，在社群媒體大量散播吸引受害者。' },
-        { title: '網購平台出現大量假商店', date: '2026-03-22', tag: '購物詐騙', desc: '多家電商平台發現假商店以超低價格吸引買家，收款後不出貨或寄送劣質品。' },
-      ].map((item, i) => (
-        <div key={i} className="bg-surface-container-lowest rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow cursor-pointer">
-          <div className="flex items-center gap-3 mb-3">
-            <span className="px-3 py-1 bg-primary-fixed text-on-primary-fixed-variant text-xs font-bold rounded-full">{item.tag}</span>
-            <span className="text-xs text-on-surface-variant">{item.date}</span>
-          </div>
-          <h3 className="text-lg font-headline font-bold text-on-surface mb-2">{item.title}</h3>
-          <p className="text-on-surface-variant text-sm leading-relaxed">{item.desc}</p>
+const RISK_STYLES: Record<string, string> = {
+  high: 'bg-error-container text-on-error-container',
+  medium: 'bg-tertiary-fixed text-on-tertiary-fixed',
+  low: 'bg-primary-fixed text-on-primary-fixed-variant',
+};
+
+const RISK_LABELS: Record<string, string> = {
+  high: '高風險',
+  medium: '中風險',
+  low: '低風險',
+};
+
+const NewsCard = ({ article }: { article: NewsArticle }) => {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div className="bg-surface-container-lowest rounded-xl shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+      <div className="p-6 cursor-pointer" onClick={() => setExpanded(!expanded)}>
+        <div className="flex items-center flex-wrap gap-2 mb-3">
+          <span className={cn("px-3 py-1 text-xs font-bold rounded-full", RISK_STYLES[article.risk_level] || RISK_STYLES.low)}>
+            {RISK_LABELS[article.risk_level] || article.risk_level}
+          </span>
+          {article.categories.slice(0, 3).map(cat => (
+            <span key={cat} className="px-2 py-0.5 bg-surface-container-high text-on-surface-variant text-[10px] font-bold rounded-full">
+              {CATEGORY_LABELS[cat] || cat}
+            </span>
+          ))}
+          {article.published_at && (
+            <span className="text-xs text-on-surface-variant ml-auto">{article.published_at}</span>
+          )}
         </div>
-      ))}
-    </div>
 
-    <div className="text-center py-8">
-      <p className="text-on-surface-variant text-sm">更多時事資訊即將上線</p>
+        <h3 className="text-lg font-headline font-bold text-on-surface mb-2">{article.title}</h3>
+
+        <div className="flex items-center justify-between">
+          {article.source && (
+            <span className="text-xs text-on-surface-variant font-medium">
+              來源：{article.source}
+            </span>
+          )}
+          <div className="flex items-center gap-1 text-primary text-xs font-bold ml-auto">
+            {expanded ? '收合' : '展開詐騙手法'}
+            {expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+          </div>
+        </div>
+      </div>
+
+      {expanded && (
+        <div className="px-6 pb-6 space-y-4 border-t border-surface-container-high pt-4">
+          <div>
+            <h4 className="text-sm font-bold text-on-surface mb-2 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-error" />
+              可能的詐騙手法
+            </h4>
+            <ul className="space-y-2">
+              {article.scam_tactics.map((tactic, i) => (
+                <li key={i} className="text-sm text-on-surface-variant pl-4 relative before:content-[''] before:absolute before:left-0 before:top-2 before:w-1.5 before:h-1.5 before:bg-error before:rounded-full">
+                  {tactic}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {article.impersonation_targets.length > 0 && (
+            <div>
+              <h4 className="text-sm font-bold text-on-surface mb-2 flex items-center gap-2">
+                <Shield className="w-4 h-4 text-primary" />
+                可能被冒充的對象
+              </h4>
+              <div className="flex flex-wrap gap-2">
+                {article.impersonation_targets.map((target, i) => (
+                  <span key={i} className="px-3 py-1 bg-secondary-container text-on-secondary-container text-xs font-medium rounded-full">
+                    {target}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {article.url && (
+            <a
+              href={article.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-sm text-primary font-bold hover:underline"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              查看原始新聞
+            </a>
+          )}
+        </div>
+      )}
     </div>
-  </motion.div>
-);
+  );
+};
+
+const NewsScreen = () => {
+  const [articles, setArticles] = useState<NewsArticle[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    fetchNews()
+      .then(data => { if (!cancelled) setArticles(data.articles); })
+      .catch(err => { if (!cancelled) setError(err instanceof Error ? err.message : '載入失敗'); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      className="space-y-8 pb-12"
+    >
+      <header>
+        <h1 className="text-4xl font-headline font-extrabold tracking-tight text-on-surface mb-2">詐騙時事</h1>
+        <p className="text-on-surface-variant font-medium">
+          根據即時新聞分析，提醒您近期最容易被利用為詐騙題材的時事。
+        </p>
+      </header>
+
+      {loading && (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="w-8 h-8 text-primary animate-spin" />
+          <span className="ml-3 text-on-surface-variant font-medium">正在載入時事資料...</span>
+        </div>
+      )}
+
+      {error && (
+        <div className="bg-error-container rounded-xl p-4 flex gap-3 items-center">
+          <AlertCircle className="w-5 h-5 text-on-error-container flex-shrink-0" />
+          <p className="text-on-error-container text-sm font-medium">{error}</p>
+        </div>
+      )}
+
+      {!loading && !error && articles.length === 0 && (
+        <div className="text-center py-16">
+          <Newspaper className="w-12 h-12 text-on-surface-variant/30 mx-auto mb-4" />
+          <p className="text-on-surface-variant">目前沒有時事資料，請稍後再試。</p>
+        </div>
+      )}
+
+      {!loading && articles.length > 0 && (
+        <div className="space-y-4">
+          {articles.map((article, i) => (
+            <NewsCard key={i} article={article} />
+          ))}
+        </div>
+      )}
+
+      <div className="bg-secondary-container rounded-xl p-4 flex gap-4 items-start">
+        <Lightbulb className="w-5 h-5 text-on-secondary-container mt-1" />
+        <div>
+          <p className="text-on-secondary-container text-sm font-semibold">資料來源說明</p>
+          <p className="text-on-secondary-container/80 text-sm">
+            時事資料來自自由時報、ETtoday、Yahoo新聞等 RSS 來源，經 AI 分析後擷取可能的詐騙利用手法。
+          </p>
+        </div>
+      </div>
+    </motion.div>
+  );
+};
 
 const RecordScreen = () => (
   <motion.div

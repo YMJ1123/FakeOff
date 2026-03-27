@@ -45,7 +45,7 @@ def _parse_json(text: str) -> dict:
     try:
         return json.loads(text)
     except json.JSONDecodeError:
-        return {"scam_tactics": [], "impersonation_targets": [], "risk_level": "unknown"}
+        return {"scam_tactics": [], "impersonation_targets": [], "keywords": [], "risk_level": "unknown"}
 
 
 if __name__ == "__main__":
