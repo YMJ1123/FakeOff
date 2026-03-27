@@ -17,5 +17,4 @@ __pycache__/
 .env.production
 .env.example
 discord-bot/
-nginx/
 api-key-test/

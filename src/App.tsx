@@ -91,11 +91,15 @@ const MessagesScreen = () => {
 
   const handlePaste = useCallback(async () => {
     try {
-      const clipText = await navigator.clipboard.readText();
-      if (clipText) setText(prev => prev + clipText);
-    } catch {
-      setError('無法讀取剪貼簿內容');
-    }
+      if (navigator.clipboard && typeof navigator.clipboard.readText === 'function') {
+        const clipText = await navigator.clipboard.readText();
+        if (clipText) { setText(prev => prev + clipText); return; }
+      }
+    } catch { /* clipboard API unavailable on HTTP */ }
+    const ta = document.querySelector<HTMLTextAreaElement>('textarea');
+    if (ta) { ta.focus(); }
+    setError('請使用 Ctrl+V（或 Cmd+V）貼上文字');
+    setTimeout(() => setError(null), 3000);
   }, []);
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
