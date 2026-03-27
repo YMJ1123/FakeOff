@@ -1,0 +1,68 @@
+version: "3.8"
+
+services:
+  # ── Flask API + ML classifier ────────────────────────────────
+  api:
+    build: .
+    container_name: fakeoff-api
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    expose:
+      - "5001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ── Nginx reverse proxy + static files ───────────────────────
+  nginx:
+    build:
+      context: .
+      dockerfile: nginx/Dockerfile
+    container_name: fakeoff-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      api:
+        condition: service_healthy
+
+  # ── n8n workflow engine ──────────────────────────────────────
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: fakeoff-n8n
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      - N8N_HOST=0.0.0.0
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - WEBHOOK_URL=http://n8n:5678/
+      - PIPELINE_API=http://api:5001
+    expose:
+      - "5678"
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+
+  # ── Discord Bot ──────────────────────────────────────────────
+  discord-bot:
+    build:
+      context: ./discord-bot
+      dockerfile: Dockerfile
+    container_name: fakeoff-discord-bot
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      - N8N_WEBHOOK_URL=http://n8n:5678/webhook/anti-fraud
+    depends_on:
+      - n8n
+
+volumes:
+  n8n_data:
