@@ -1,6 +1,8 @@
 import argparse
 import os
+import random
 
+import numpy as np
 import torch
 import torch.nn
 import torch.optim as optim
@@ -19,6 +21,16 @@ from .metrics.metrics import (
 )
 
 
+def set_seed(seed=42):
+    """Set random seed for reproducibility."""
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--batch_size", type=int, default=32)
@@ -30,8 +42,8 @@ def get_args():
     parser.add_argument("--gamma", type=float, default=2.0)
     parser.add_argument("--adaptive", action="store_true")
     parser.add_argument("--no_focal", action="store_true", help="Disable focal loss and use cross-entropy instead")
-    parser.add_argument("--train_path", type=str, default="train_data.pt")
-    parser.add_argument("--val_path", type=str, default="val_data.pt")
+    parser.add_argument("--train_path", type=str, default="spam_zh_tensor_splits/train.pt")
+    parser.add_argument("--val_path", type=str, default="spam_zh_tensor_splits/val.pt")
     parser.add_argument("--save_dir", type=str, default="classifier/checkpoints")
     parser.add_argument("--save_prefix", type=str, default="")
     parser.add_argument("--hidden_dim", type=int, default=512)
@@ -57,6 +69,9 @@ def train(
         n_bins=15,
         device=torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 ):
+    # Set seed for reproducibility
+    set_seed(42)
+    
     # Create save directory if it doesn't exist
     os.makedirs(save_dir, exist_ok=True)
     
