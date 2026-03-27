@@ -3,6 +3,7 @@ const API_BASE = '/api';
 export interface KeywordMatchResult {
   matched_categories: Record<string, string[]>;
   matched_context: Record<string, unknown[]>;
+  matched_dynamic_keywords: string[];
   match_score: number;
   has_match: boolean;
 }

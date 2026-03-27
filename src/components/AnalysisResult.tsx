@@ -15,6 +15,7 @@ import {
   Cpu,
   Globe,
   ChevronRight,
+  Newspaper,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
@@ -38,16 +39,26 @@ function computeSourceScores(result: AnalysisResultType): SourceScore[] {
 
   // 1. Keyword check
   const kw = result.keywordMatch;
+  const dynKws = kw.matched_dynamic_keywords ?? [];
   const kwRisk = kw.has_match ? Math.min(kw.match_score * 15, 100) : 0;
   const kwSafe = 100 - kwRisk;
+  const staticCount = Object.keys(kw.matched_categories).length;
+  let kwDetail = '';
+  if (staticCount > 0 && dynKws.length > 0) {
+    kwDetail = `靜態 ${staticCount} 類 + 時事 ${dynKws.length} 詞`;
+  } else if (dynKws.length > 0) {
+    kwDetail = `時事關鍵字命中 ${dynKws.length} 詞`;
+  } else if (staticCount > 0) {
+    kwDetail = `命中 ${staticCount} 類（分數 ${kw.match_score}）`;
+  } else {
+    kwDetail = '未命中任何風險關鍵字';
+  }
   sources.push({
     label: '關鍵字',
     icon: Search,
     score: kwSafe,
     status: kwSafe >= 70 ? 'safe' : kwSafe >= 40 ? 'warning' : 'danger',
-    detail: kw.has_match
-      ? `命中 ${Object.keys(kw.matched_categories).length} 類（分數 ${kw.match_score}）`
-      : '未命中任何風險關鍵字',
+    detail: kwDetail,
   });
 
   // 2. Scam Armor (ML Classifier)
@@ -66,20 +77,24 @@ function computeSourceScores(result: AnalysisResultType): SourceScore[] {
   // 3. URL check
   const urls = result.urlResults ?? [];
   if (urls.length > 0) {
-    const validUrls = urls.filter(u => u.score != null);
-    if (validUrls.length > 0) {
-      const avgScore = Math.round(validUrls.reduce((s, u) => s + (u.score ?? 100), 0) / validUrls.length);
-      const hasBlacklist = urls.some(u => u.blacklisted);
-      const hasPhishing = urls.some(u => (u.phishing_count ?? 0) > 0);
-      const urlSafe = hasBlacklist ? Math.min(avgScore, 10) : hasPhishing ? Math.min(avgScore, 30) : avgScore;
-      sources.push({
-        label: '網址查詢',
-        icon: Globe,
-        score: urlSafe,
-        status: urlSafe >= 70 ? 'safe' : urlSafe >= 40 ? 'warning' : 'danger',
-        detail: hasBlacklist ? '含黑名單網址' : hasPhishing ? '含釣魚記錄' : `信任分數 ${avgScore}/100`,
-      });
-    }
+    const hasBlacklist = urls.some(u => u.blacklisted);
+    const hasPhishing = urls.some(u => (u.phishing_count ?? 0) > 0);
+    const hasUnknown = urls.some(u => u.score == null);
+    const scores = urls.map(u => u.score ?? 20);
+    const avgScore = Math.round(scores.reduce((s, v) => s + v, 0) / scores.length);
+    const urlSafe = hasBlacklist ? Math.min(avgScore, 10) : hasPhishing ? Math.min(avgScore, 30) : avgScore;
+    let urlDetail = '';
+    if (hasBlacklist) urlDetail = '含黑名單網址';
+    else if (hasPhishing) urlDetail = '含釣魚記錄';
+    else if (hasUnknown) urlDetail = '含不明網域（可疑）';
+    else urlDetail = `信任分數 ${avgScore}/100`;
+    sources.push({
+      label: '網址查詢',
+      icon: Globe,
+      score: urlSafe,
+      status: urlSafe >= 70 ? 'safe' : urlSafe >= 40 ? 'warning' : 'danger',
+      detail: urlDetail,
+    });
   }
 
   // 4. Number check
@@ -104,10 +119,22 @@ function computeSourceScores(result: AnalysisResultType): SourceScore[] {
   return sources;
 }
 
-function computeCompositeScore(sources: SourceScore[]): number {
-  if (sources.length === 0) return 50;
-  const total = sources.reduce((s, src) => s + src.score, 0);
-  return Math.round(total / sources.length);
+function computeCompositeScore(sources: SourceScore[], result: AnalysisResultType): number {
+  const sourceAvg = sources.length > 0
+    ? sources.reduce((s, src) => s + src.score, 0) / sources.length
+    : 50;
+
+  const { is_scam, confidence } = result.conclusion;
+  let conclusionSafety: number;
+  if (is_scam === true) {
+    conclusionSafety = (1 - confidence) * 100;
+  } else if (is_scam === false) {
+    conclusionSafety = confidence * 100;
+  } else {
+    conclusionSafety = 50;
+  }
+
+  return Math.round(sourceAvg * 0.3 + conclusionSafety * 0.7);
 }
 
 const statusColor = {
@@ -165,7 +192,7 @@ function ScoreRing({ score, status, size = 120 }: { score: number; status: 'safe
 export default function AnalysisResult({ result, onDismiss }: Props) {
   const [expanded, setExpanded] = useState(false);
   const sources = computeSourceScores(result);
-  const compositeScore = computeCompositeScore(sources);
+  const compositeScore = computeCompositeScore(sources, result);
   const overallStatus = getOverallStatus(compositeScore);
   const OverallIcon = STATUS_ICON[overallStatus];
   const colors = statusColor[overallStatus];
@@ -189,11 +216,16 @@ export default function AnalysisResult({ result, onDismiss }: Props) {
                 {STATUS_LABEL[overallStatus]}
               </span>
             </div>
-            {result.conclusion.scam_type && (
-              <span className={cn('inline-block px-3 py-1 rounded-full text-xs font-bold', colors.bg, colors.text)}>
-                {result.conclusion.scam_type}
+            <div className="flex items-center flex-wrap gap-2">
+              {result.conclusion.scam_type && (
+                <span className={cn('inline-block px-3 py-1 rounded-full text-xs font-bold', colors.bg, colors.text)}>
+                  {result.conclusion.scam_type}
+                </span>
+              )}
+              <span className="text-xs text-on-surface-variant">
+                AI 信心度 {Math.round(result.conclusion.confidence * 100)}%
               </span>
-            )}
+            </div>
             {result.conclusion.advice && (
               <p className="text-sm text-on-surface-variant leading-relaxed line-clamp-2">
                 {result.conclusion.advice}
@@ -395,7 +427,9 @@ export default function AnalysisResult({ result, onDismiss }: Props) {
                       </div>
                     ) : u.error ? (
                       <span className="text-xs text-error">{u.error}</span>
-                    ) : null}
+                    ) : (
+                      <span className="text-xs text-error font-bold">無信任記錄（不明網域，高度可疑）</span>
+                    )}
                     <div className="flex flex-wrap gap-2 text-xs text-on-surface-variant">
                       {u.blacklisted && <span className="text-error font-bold">黑名單</span>}
                       {(u.phishing_count ?? 0) > 0 && <span className="text-error">釣魚記錄: {u.phishing_count}</span>}
@@ -429,21 +463,78 @@ export default function AnalysisResult({ result, onDismiss }: Props) {
 
             {/* Keyword match details */}
             {result.keywordMatch.has_match && (
-              <div className="bg-surface-container-low rounded-xl p-5 space-y-2">
+              <div className="bg-surface-container-low rounded-xl p-5 space-y-4">
                 <h4 className="font-headline font-bold text-sm text-on-surface flex items-center gap-2">
                   <Search className="w-4 h-4 text-primary" />
                   關鍵字匹配（分數：{result.keywordMatch.match_score}）
                 </h4>
-                <div className="flex flex-wrap gap-2">
-                  {Object.entries(result.keywordMatch.matched_categories).map(([cat, keywords]) => (
-                    <span
-                      key={cat}
-                      className="inline-flex items-center gap-1 text-xs bg-tertiary-fixed text-on-tertiary-fixed px-3 py-1 rounded-full font-semibold"
-                    >
-                      {cat}: {(keywords as string[]).join(', ')}
-                    </span>
-                  ))}
-                </div>
+
+                {Object.keys(result.keywordMatch.matched_categories).length > 0 && (
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-bold text-on-surface-variant">靜態關鍵字命中</p>
+                    <div className="flex flex-wrap gap-2">
+                      {Object.entries(result.keywordMatch.matched_categories).map(([cat, keywords]) => (
+                        <span
+                          key={cat}
+                          className="inline-flex items-center gap-1 text-xs bg-tertiary-fixed text-on-tertiary-fixed px-3 py-1 rounded-full font-semibold"
+                        >
+                          {cat}: {(keywords as string[]).join(', ')}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {(result.keywordMatch.matched_dynamic_keywords ?? []).length > 0 && (
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-bold text-on-surface-variant flex items-center gap-1.5">
+                      <Newspaper className="w-3.5 h-3.5" />
+                      時事動態關鍵字命中
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {(result.keywordMatch.matched_dynamic_keywords).map((kw, i) => (
+                        <span
+                          key={i}
+                          className="inline-flex items-center gap-1 text-xs bg-error-container text-on-error-container px-3 py-1 rounded-full font-semibold"
+                        >
+                          {kw}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {Object.keys(result.keywordMatch.matched_context).length > 0 && (
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-bold text-on-surface-variant flex items-center gap-1.5">
+                      <AlertTriangle className="w-3.5 h-3.5" />
+                      匹配的近期新聞
+                    </p>
+                    <div className="space-y-2">
+                      {Object.entries(result.keywordMatch.matched_context).map(([cat, entries]) =>
+                        (entries as Array<{ title: string; source?: string; risk_level?: string }>).map((entry, i) => (
+                          <div key={`${cat}-${i}`} className="bg-surface-container rounded-lg p-3 flex items-start gap-2">
+                            <Newspaper className="w-3.5 h-3.5 text-error mt-0.5 flex-shrink-0" />
+                            <div>
+                              <p className="text-xs font-semibold text-on-surface">{entry.title}</p>
+                              <div className="flex gap-2 mt-1">
+                                {entry.source && <span className="text-[10px] text-on-surface-variant">{entry.source}</span>}
+                                {entry.risk_level && (
+                                  <span className={cn(
+                                    'text-[10px] font-bold px-1.5 py-0.5 rounded',
+                                    entry.risk_level === 'high' ? 'bg-error-container text-on-error-container' : 'bg-tertiary-fixed text-on-tertiary-fixed',
+                                  )}>
+                                    {entry.risk_level === 'high' ? '高風險' : entry.risk_level === 'medium' ? '中風險' : entry.risk_level}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </motion.div>
